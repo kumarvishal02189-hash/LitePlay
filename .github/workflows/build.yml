@@ -1,0 +1,741 @@
+name: Build LitePlay APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Generate Complete Project Files
+        run: |
+          mkdir -p app/src/main/java/com/liteplay/ultralite
+          mkdir -p app/src/main/res/layout
+          mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/menu
+
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "LitePlayUltraLite"
+          include(":app")
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.2.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+          }
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+          android {
+              namespace = "com.liteplay.ultralite"
+              compileSdk = 34
+              defaultConfig {
+                  applicationId = "com.liteplay.ultralite"
+                  minSdk = 29
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0.0"
+                  resourceConfigurations += listOf("en")
+              }
+              buildTypes {
+                  release {
+                      isMinifyEnabled = true
+                      isShrinkResources = true
+                      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+                      signingConfig = signingConfigs.getByName("debug")
+                  }
+              }
+              buildFeatures { viewBinding = true }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.12.0")
+              implementation("androidx.appcompat:appcompat:1.6.1")
+              implementation("com.google.android.material:material:1.11.0")
+              implementation("androidx.recyclerview:recyclerview:1.3.2")
+              val media3Version = "1.3.1"
+              implementation("androidx.media3:media3-exoplayer:$media3Version")
+              implementation("androidx.media3:media3-session:$media3Version")
+              implementation("androidx.media3:media3-ui:$media3Version")
+              implementation("androidx.media3:media3-common:$media3Version")
+          }
+          EOF
+
+          cat << 'EOF' > app/proguard-rules.pro
+          -keep class androidx.media3.** { *; }
+          -dontwarn androidx.media3.**
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+              <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
+              <application
+                  android:allowBackup="false"
+                  android:icon="@drawable/ic_media_note"
+                  android:label="LitePlay Ultra Lite"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.MaterialComponents.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <activity android:name=".VideoPlayerActivity"
+                      android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+                      android:exported="false" />
+                  <service android:name=".PlaybackService" android:exported="true" android:foregroundServiceType="mediaPlayback">
+                      <intent-filter>
+                          <action android:name="androidx.media3.session.MediaSessionService" />
+                      </intent-filter>
+                  </service>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/drawable/ic_media_note.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+              <path android:fillColor="#03DAC6" android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" />
+          </vector>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/colors.xml
+          <resources>
+              <color name="bg_dark">#121212</color>
+              <color name="surface_dark">#1E1E1E</color>
+              <color name="surface_elevated">#282828</color>
+              <color name="accent_teal">#03DAC6</color>
+              <color name="text_primary">#FFFFFF</color>
+              <color name="text_secondary">#B3FFFFFF</color>
+              <color name="overlay_dark">#99000000</color>
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/menu/main_menu.xml
+          <menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+              <item android:id="@+id/action_screen_off_audio" android:checkable="true" android:title="Continue video audio when screen is off" app:showAsAction="never" />
+              <item android:id="@+id/action_sort_title" android:title="Sort by Title (A-Z)" app:showAsAction="never" />
+              <item android:id="@+id/action_sort_date" android:title="Sort by Date Added" app:showAsAction="never" />
+              <item android:id="@+id/action_sort_duration" android:title="Sort by Duration" app:showAsAction="never" />
+          </menu>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/activity_main.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:layout_width="match_parent" android:layout_height="match_parent"
+              android:background="@color/bg_dark" android:orientation="vertical">
+              <androidx.appcompat.widget.Toolbar android:id="@+id/toolbar"
+                  android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+                  android:background="@color/surface_dark" app:title="LitePlay Ultra Lite" app:titleTextColor="@color/text_primary" />
+              <EditText android:id="@+id/searchInput" android:layout_width="match_parent" android:layout_height="44dp"
+                  android:layout_margin="8dp" android:background="@color/surface_elevated" android:hint="Search media..."
+                  android:paddingHorizontal="12dp" android:textColor="@color/text_primary" android:textColorHint="@color/text_secondary" android:textSize="14sp" />
+              <com.google.android.material.tabs.TabLayout android:id="@+id/tabLayout"
+                  android:layout_width="match_parent" android:layout_height="44dp" android:background="@color/surface_dark"
+                  app:tabIndicatorColor="@color/accent_teal" app:tabSelectedTextColor="@color/accent_teal" app:tabTextColor="@color/text_secondary" />
+              <LinearLayout android:id="@+id/folderBackBar" android:layout_width="match_parent" android:layout_height="40dp"
+                  android:background="@color/surface_elevated" android:gravity="center_vertical" android:paddingHorizontal="12dp" android:visibility="gone">
+                  <TextView android:id="@+id/btnBackFolder" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:text="Back to Folders" android:textColor="@color/accent_teal" android:textStyle="bold" />
+                  <TextView android:id="@+id/txtCurrentFolder" android:layout_width="0dp" android:layout_height="wrap_content"
+                      android:layout_marginStart="12dp" android:layout_weight="1" android:textColor="@color/text_primary" />
+              </LinearLayout>
+              <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+                  <androidx.recyclerview.widget.RecyclerView android:id="@+id/recyclerView" android:layout_width="match_parent" android:layout_height="match_parent" />
+                  <LinearLayout android:id="@+id/permissionContainer" android:layout_width="match_parent" android:layout_height="match_parent"
+                      android:gravity="center" android:orientation="vertical" android:padding="24dp" android:visibility="gone">
+                      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                          android:text="Media permission is required to play local files." android:textColor="@color/text_secondary" />
+                      <Button android:id="@+id/btnGrantPermission" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                          android:layout_marginTop="16dp" android:text="Grant Permission" />
+                  </LinearLayout>
+                  <TextView android:id="@+id/emptyView" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:layout_gravity="center" android:text="No media files found" android:textColor="@color/text_secondary" android:visibility="gone" />
+              </FrameLayout>
+              <LinearLayout android:id="@+id/miniPlayer" android:layout_width="match_parent" android:layout_height="wrap_content"
+                  android:background="@color/surface_elevated" android:orientation="vertical" android:padding="8dp" android:visibility="gone">
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical">
+                      <ImageView android:id="@+id/miniArt" android:layout_width="40dp" android:layout_height="40dp" android:src="@drawable/ic_media_note" />
+                      <LinearLayout android:id="@+id/miniInfoArea" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_marginHorizontal="8dp" android:layout_weight="1" android:orientation="vertical">
+                          <TextView android:id="@+id/miniTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+                              android:maxLines="1" android:textColor="@color/text_primary" android:textStyle="bold" />
+                          <TextView android:id="@+id/miniSubtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+                              android:maxLines="1" android:textColor="@color/text_secondary" android:textSize="12sp" />
+                      </LinearLayout>
+                      <Button android:id="@+id/btnShuffle" style="?android:attr/borderlessButtonStyle" android:layout_width="40dp" android:layout_height="38dp" android:text="SHF" android:textSize="10sp" />
+                      <Button android:id="@+id/btnPrev" style="?android:attr/borderlessButtonStyle" android:layout_width="38dp" android:layout_height="38dp" android:text="|&lt;" />
+                      <Button android:id="@+id/btnPlayPause" style="?android:attr/borderlessButtonStyle" android:layout_width="48dp" android:layout_height="38dp" android:text="PLAY" android:textColor="@color/accent_teal" android:textSize="11sp" />
+                      <Button android:id="@+id/btnNext" style="?android:attr/borderlessButtonStyle" android:layout_width="38dp" android:layout_height="38dp" android:text="&gt;|" />
+                      <Button android:id="@+id/btnRepeat" style="?android:attr/borderlessButtonStyle" android:layout_width="40dp" android:layout_height="38dp" android:text="RPT" android:textSize="10sp" />
+                  </LinearLayout>
+                  <SeekBar android:id="@+id/miniSeekBar" android:layout_width="match_parent" android:layout_height="20dp" />
+              </LinearLayout>
+          </LinearLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/item_media.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent" android:layout_height="62dp"
+              android:gravity="center_vertical" android:orientation="horizontal" android:paddingHorizontal="12dp">
+              <ImageView android:id="@+id/itemThumb" android:layout_width="42dp" android:layout_height="42dp"
+                  android:background="@color/surface_elevated" android:scaleType="centerCrop" android:src="@drawable/ic_media_note" />
+              <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                  android:layout_marginHorizontal="12dp" android:layout_weight="1" android:orientation="vertical">
+                  <TextView android:id="@+id/itemTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:maxLines="1" android:textColor="@color/text_primary" android:textSize="15sp" />
+                  <TextView android:id="@+id/itemSubtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:maxLines="1" android:textColor="@color/text_secondary" android:textSize="12sp" />
+              </LinearLayout>
+              <TextView android:id="@+id/itemDuration" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                  android:textColor="@color/text_secondary" android:textSize="12sp" />
+          </LinearLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/layout/activity_video_player.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              xmlns:app="http://schemas.android.com/apk/res-auto"
+              android:id="@+id/videoRoot" android:layout_width="match_parent" android:layout_height="match_parent"
+              android:background="#000000" android:keepScreenOn="true">
+              <androidx.media3.ui.PlayerView android:id="@+id/playerView"
+                  android:layout_width="match_parent" android:layout_height="match_parent"
+                  app:surface_type="surface_view" app:use_controller="false" />
+              <RelativeLayout android:id="@+id/controlsOverlay" android:layout_width="match_parent" android:layout_height="match_parent"
+                  android:background="@color/overlay_dark" android:padding="16dp">
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_alignParentTop="true" android:gravity="center_vertical">
+                      <Button android:id="@+id/btnCloseVideo" style="?android:attr/borderlessButtonStyle" android:layout_width="wrap_content" android:layout_height="40dp" android:text="Back" android:textColor="@color/text_primary" />
+                      <TextView android:id="@+id/videoTitle" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:maxLines="1" android:textColor="@color/text_primary" android:textStyle="bold" />
+                      <Button android:id="@+id/btnRotate" style="?android:attr/borderlessButtonStyle" android:layout_width="wrap_content" android:layout_height="40dp" android:text="Rotate" android:textColor="@color/accent_teal" />
+                  </LinearLayout>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_centerInParent="true" android:gravity="center">
+                      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Brightness" android:textColor="@color/text_secondary" android:textSize="12sp" />
+                          <SeekBar android:id="@+id/brightnessSeek" android:layout_width="120dp" android:layout_height="wrap_content" android:max="100" />
+                      </LinearLayout>
+                      <Button android:id="@+id/btnVideoPlayPause" android:layout_width="84dp" android:layout_height="50dp" android:text="PAUSE" />
+                      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                          <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Volume" android:textColor="@color/text_secondary" android:textSize="12sp" />
+                          <SeekBar android:id="@+id/volumeSeek" android:layout_width="120dp" android:layout_height="wrap_content" />
+                      </LinearLayout>
+                  </LinearLayout>
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_alignParentBottom="true" android:gravity="center_vertical">
+                      <TextView android:id="@+id/txtPosition" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="00:00" android:textColor="@color/text_primary" />
+                      <SeekBar android:id="@+id/videoSeekBar" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+                      <TextView android:id="@+id/txtDuration" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="00:00" android:textColor="@color/text_primary" />
+                  </LinearLayout>
+              </RelativeLayout>
+          </FrameLayout>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/liteplay/ultralite/MediaItemModel.kt
+          package com.liteplay.ultralite
+          import android.net.Uri
+          import java.util.Locale
+          import java.util.concurrent.TimeUnit
+
+          data class MediaItemModel(
+              val id: Long, val uri: Uri, val title: String, val artistOrResolution: String,
+              val durationMs: Long, val dateAddedSec: Long, val folderName: String, val isVideo: Boolean
+          ) {
+              fun formattedDuration(): String {
+                  val s = TimeUnit.MILLISECONDS.toSeconds(durationMs)
+                  return if (s / 3600 > 0) String.format(Locale.US, "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
+                  else String.format(Locale.US, "%02d:%02d", (s % 3600) / 60, s % 60)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/liteplay/ultralite/PrefsManager.kt
+          package com.liteplay.ultralite
+          import android.content.Context
+          object PrefsManager {
+              private const val PREFS = "liteplay_prefs"
+              fun isContinueAudioScreenOff(c: Context) = c.getSharedPreferences(PREFS, 0).getBoolean("screen_off", true)
+              fun setContinueAudioScreenOff(c: Context, v: Boolean) = c.getSharedPreferences(PREFS, 0).edit().putBoolean("screen_off", v).apply()
+              fun addRecentUri(c: Context, u: String) {
+                  val list = getRecentUris(c).toMutableList().apply { remove(u); add(0, u) }.take(50).joinToString("|")
+                  c.getSharedPreferences(PREFS, 0).edit().putString("recent", list).apply()
+              }
+              fun getRecentUris(c: Context): List<String> {
+                  val r = c.getSharedPreferences(PREFS, 0).getString("recent", "") ?: ""
+                  return if (r.isBlank()) emptyList() else r.split("|")
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/liteplay/ultralite/MediaRepository.kt
+          package com.liteplay.ultralite
+          import android.content.ContentUris
+          import android.content.Context
+          import android.provider.MediaStore
+
+          object MediaRepository {
+              private var cachedAudio: List<MediaItemModel>? = null
+              private var cachedVideo: List<MediaItemModel>? = null
+
+              fun getAudioFiles(context: Context, force: Boolean = false): List<MediaItemModel> {
+                  if (!force && cachedAudio != null) return cachedAudio!!
+                  val list = mutableListOf<MediaItemModel>()
+                  val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+                  val proj = arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.DATE_ADDED, MediaStore.Audio.Media.BUCKET_DISPLAY_NAME)
+                  context.contentResolver.query(uri, proj, "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} > 0", null, null)?.use { c ->
+                      while (c.moveToNext()) {
+                          val id = c.getLong(0)
+                          list.add(MediaItemModel(id, ContentUris.withAppendedId(uri, id), c.getString(1) ?: "Audio", c.getString(2) ?: "Unknown", c.getLong(3), c.getLong(4), c.getString(5) ?: "Music", false))
+                      }
+                  }
+                  cachedAudio = list
+                  return list
+              }
+
+              fun getVideoFiles(context: Context, force: Boolean = false): List<MediaItemModel> {
+                  if (!force && cachedVideo != null) return cachedVideo!!
+                  val list = mutableListOf<MediaItemModel>()
+                  val uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+                  val proj = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.TITLE, MediaStore.Video.Media.RESOLUTION, MediaStore.Video.Media.DURATION, MediaStore.Video.Media.DATE_ADDED, MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
+                  context.contentResolver.query(uri, proj, "${MediaStore.Video.Media.DURATION} > 0", null, null)?.use { c ->
+                      while (c.moveToNext()) {
+                          val id = c.getLong(0)
+                          list.add(MediaItemModel(id, ContentUris.withAppendedId(uri, id), c.getString(1) ?: "Video", c.getString(2) ?: "Video", c.getLong(3), c.getLong(4), c.getString(5) ?: "Videos", true))
+                      }
+                  }
+                  cachedVideo = list
+                  return list
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/liteplay/ultralite/PlaybackService.kt
+          package com.liteplay.ultralite
+          import android.app.PendingIntent
+          import android.content.Intent
+          import androidx.media3.common.AudioAttributes
+          import androidx.media3.common.C
+          import androidx.media3.exoplayer.ExoPlayer
+          import androidx.media3.session.MediaSession
+          import androidx.media3.session.MediaSessionService
+
+          class PlaybackService : MediaSessionService() {
+              companion object { var playerInstance: ExoPlayer? = null }
+              private var mediaSession: MediaSession? = null
+
+              override fun onCreate() {
+                  super.onCreate()
+                  val attr = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build()
+                  val player = ExoPlayer.Builder(this).setAudioAttributes(attr, true).setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_LOCAL).build()
+                  playerInstance = player
+                  val pi = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                  mediaSession = MediaSession.Builder(this, player).setSessionActivity(pi).build()
+              }
+              override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = mediaSession
+              override fun onDestroy() {
+                  mediaSession?.run { player.release(); release(); mediaSession = null }
+                  playerInstance = null
+                  super.onDestroy()
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/liteplay/ultralite/MediaAdapter.kt
+          package com.liteplay.ultralite
+          import android.content.Context
+          import android.graphics.Bitmap
+          import android.os.Handler
+          import android.os.Looper
+          import android.util.LruCache
+          import android.util.Size
+          import android.view.LayoutInflater
+          import android.view.ViewGroup
+          import androidx.recyclerview.widget.RecyclerView
+          import com.liteplay.ultralite.databinding.ItemMediaBinding
+          import java.util.concurrent.Executors
+
+          sealed class ListEntry {
+              data class MediaEntry(val item: MediaItemModel) : ListEntry()
+              data class FolderEntry(val folderName: String, val count: Int) : ListEntry()
+          }
+
+          class MediaAdapter(
+              private val context: Context,
+              private val onMediaClick: (MediaItemModel, List<MediaItemModel>) -> Unit,
+              private val onFolderClick: (String) -> Unit
+          ) : RecyclerView.Adapter<MediaAdapter.ViewHolder>() {
+              private val entries = mutableListOf<ListEntry>()
+              private var currentMediaList: List<MediaItemModel> = emptyList()
+              private val mainHandler = Handler(Looper.getMainLooper())
+              private val thumbExecutor = Executors.newFixedThreadPool(2)
+              private val thumbCache = object : LruCache<String, Bitmap>(4 * 1024) {
+                  override fun sizeOf(key: String, value: Bitmap) = value.byteCount / 1024
+              }
+
+              fun submitMediaList(items: List<MediaItemModel>) {
+                  currentMediaList = items; entries.clear(); entries.addAll(items.map { ListEntry.MediaEntry(it) }); notifyDataSetChanged()
+              }
+              fun submitFolders(folders: Map<String, Int>) {
+                  entries.clear(); folders.entries.sortedBy { it.key.lowercase() }.forEach { entries.add(ListEntry.FolderEntry(it.key, it.value)) }; notifyDataSetChanged()
+              }
+              override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = ViewHolder(ItemMediaBinding.inflate(LayoutInflater.from(parent.context), parent, false))
+              override fun getItemCount() = entries.size
+              override fun onBindViewHolder(holder: ViewHolder, position: Int) = holder.bind(entries[position])
+
+              inner class ViewHolder(private val b: ItemMediaBinding) : RecyclerView.ViewHolder(b.root) {
+                  fun bind(e: ListEntry) {
+                      when (e) {
+                          is ListEntry.FolderEntry -> {
+                              b.itemTitle.text = e.folderName; b.itemSubtitle.text = "${e.count} files"; b.itemDuration.text = "Folder"
+                              b.itemThumb.setImageResource(R.drawable.ic_media_note)
+                              b.root.setOnClickListener { onFolderClick(e.folderName) }
+                          }
+                          is ListEntry.MediaEntry -> {
+                              val m = e.item
+                              b.itemTitle.text = m.title; b.itemSubtitle.text = m.artistOrResolution; b.itemDuration.text = m.formattedDuration()
+                              val key = m.uri.toString(); b.itemThumb.tag = key
+                              val cached = thumbCache.get(key)
+                              if (cached != null) b.itemThumb.setImageBitmap(cached)
+                              else {
+                                  b.itemThumb.setImageResource(R.drawable.ic_media_note)
+                                  thumbExecutor.execute {
+                                      try {
+                                          val bmp = context.contentResolver.loadThumbnail(m.uri, Size(96, 96), null)
+                                          thumbCache.put(key, bmp)
+                                          mainHandler.post { if (b.itemThumb.tag == key) b.itemThumb.setImageBitmap(bmp) }
+                                      } catch (_: Exception) {}
+                                  }
+                              }
+                              b.root.setOnClickListener { onMediaClick(m, currentMediaList) }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/liteplay/ultralite/MainActivity.kt
+          package com.liteplay.ultralite
+          import android.Manifest
+          import android.content.ComponentName
+          import android.content.Intent
+          import android.content.pm.PackageManager
+          import android.os.Build
+          import android.os.Bundle
+          import android.os.Handler
+          import android.os.Looper
+          import android.text.Editable
+          import android.text.TextWatcher
+          import android.view.Menu
+          import android.view.MenuItem
+          import android.view.View
+          import android.widget.SeekBar
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.core.content.ContextCompat
+          import androidx.media3.common.MediaItem
+          import androidx.media3.common.MediaMetadata
+          import androidx.media3.common.Player
+          import androidx.media3.session.MediaController
+          import androidx.media3.session.SessionToken
+          import androidx.recyclerview.widget.LinearLayoutManager
+          import com.google.android.material.tabs.TabLayout
+          import com.google.common.util.concurrent.ListenableFuture
+          import com.google.common.util.concurrent.MoreExecutors
+          import com.liteplay.ultralite.databinding.ActivityMainBinding
+          import java.util.concurrent.Executors
+
+          class MainActivity : AppCompatActivity() {
+              private lateinit var binding: ActivityMainBinding
+              private lateinit var adapter: MediaAdapter
+              private var controllerFuture: ListenableFuture<MediaController>? = null
+              private var mediaController: MediaController? = null
+              private val bgExecutor = Executors.newSingleThreadExecutor()
+              private val uiHandler = Handler(Looper.getMainLooper())
+              private var currentSort = 0
+              private var currentTab = 0
+              private var selectedFolder: String? = null
+              private var searchQuery = ""
+
+              private val permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { map ->
+                  if (map.values.any { it }) { binding.permissionContainer.visibility = View.GONE; refreshList(true) }
+                  else binding.permissionContainer.visibility = View.VISIBLE
+              }
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  binding = ActivityMainBinding.inflate(layoutInflater)
+                  setContentView(binding.root)
+                  setSupportActionBar(binding.toolbar)
+
+                  listOf("Music", "Videos", "Folders", "Recent").forEach { binding.tabLayout.addTab(binding.tabLayout.newTab().setText(it)) }
+                  binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+                      override fun onTabSelected(t: TabLayout.Tab) { currentTab = t.position; selectedFolder = null; binding.folderBackBar.visibility = View.GONE; refreshList() }
+                      override fun onTabUnselected(t: TabLayout.Tab) {}
+                      override fun onTabReselected(t: TabLayout.Tab) {}
+                  })
+                  binding.btnBackFolder.setOnClickListener { selectedFolder = null; binding.folderBackBar.visibility = View.GONE; refreshList() }
+
+                  adapter = MediaAdapter(this, { item, q -> playMedia(item, q) }, { f -> selectedFolder = f; binding.folderBackBar.visibility = View.VISIBLE; binding.txtCurrentFolder.text = f; refreshList() })
+                  binding.recyclerView.layoutManager = LinearLayoutManager(this)
+                  binding.recyclerView.adapter = adapter
+
+                  binding.searchInput.addTextChangedListener(object : TextWatcher {
+                      override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                      override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) { searchQuery = s?.toString()?.trim().orEmpty(); refreshList() }
+                      override fun afterTextChanged(s: Editable?) {}
+                  })
+                  binding.btnGrantPermission.setOnClickListener { checkPerms() }
+                  binding.btnPlayPause.setOnClickListener { mediaController?.let { if (it.isPlaying) it.pause() else it.play() } }
+                  binding.btnPrev.setOnClickListener { mediaController?.seekToPreviousMediaItem() }
+                  binding.btnNext.setOnClickListener { mediaController?.seekToNextMediaItem() }
+                  binding.btnShuffle.setOnClickListener { mediaController?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled; updateMini() } }
+                  binding.btnRepeat.setOnClickListener { mediaController?.let { it.repeatMode = if (it.repeatMode == Player.REPEAT_MODE_OFF) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF; updateMini() } }
+                  binding.miniSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                      override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { if (fromUser) mediaController?.seekTo(p * 1000L) }
+                      override fun onStartTrackingTouch(s: SeekBar?) {}
+                      override fun onStopTrackingTouch(s: SeekBar?) {}
+                  })
+                  binding.miniInfoArea.setOnClickListener {
+                      if (mediaController?.currentMediaItem?.mediaMetadata?.extras?.getBoolean("isVideo") == true) startActivity(Intent(this, VideoPlayerActivity::class.java))
+                  }
+                  checkPerms()
+              }
+
+              override fun onStart() {
+                  super.onStart()
+                  val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
+                  controllerFuture = MediaController.Builder(this, token).buildAsync()
+                  controllerFuture?.addListener({
+                      mediaController = controllerFuture?.get()
+                      mediaController?.addListener(object : Player.Listener {
+                          override fun onEvents(player: Player, events: Player.Events) { updateMini() }
+                      })
+                      updateMini()
+                  }, MoreExecutors.directExecutor())
+              }
+
+              override fun onStop() {
+                  controllerFuture?.let { MediaController.releaseFuture(it) }
+                  mediaController = null
+                  super.onStop()
+              }
+
+              override fun onCreateOptionsMenu(menu: Menu): Boolean {
+                  menuInflater.inflate(R.menu.main_menu, menu)
+                  menu.findItem(R.id.action_screen_off_audio)?.isChecked = PrefsManager.isContinueAudioScreenOff(this)
+                  return true
+              }
+
+              override fun onOptionsItemSelected(item: MenuItem): Boolean {
+                  when (item.itemId) {
+                      R.id.action_screen_off_audio -> { item.isChecked = !item.isChecked; PrefsManager.setContinueAudioScreenOff(this, item.isChecked) }
+                      R.id.action_sort_title -> { currentSort = 0; refreshList() }
+                      R.id.action_sort_date -> { currentSort = 1; refreshList() }
+                      R.id.action_sort_duration -> { currentSort = 2; refreshList() }
+                  }
+                  return true
+              }
+
+              private fun checkPerms() {
+                  val perms = if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_VIDEO)
+                  else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                  if (perms.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
+                      binding.permissionContainer.visibility = View.GONE; refreshList(true)
+                  } else permLauncher.launch(perms)
+              }
+
+              private fun refreshList(force: Boolean = false) {
+                  bgExecutor.execute {
+                      val a = MediaRepository.getAudioFiles(this, force)
+                      val v = MediaRepository.getVideoFiles(this, force)
+                      val all = a + v
+                      if (currentTab == 2 && selectedFolder == null && searchQuery.isEmpty()) {
+                          val map = all.groupingBy { it.folderName }.eachCount()
+                          uiHandler.post { adapter.submitFolders(map) }
+                          return@execute
+                      }
+                      val base = when (currentTab) {
+                          0 -> a; 1 -> v; 2 -> all.filter { it.folderName == selectedFolder }
+                          else -> { val byUri = all.associateBy { it.uri.toString() }; PrefsManager.getRecentUris(this).mapNotNull { byUri[it] } }
+                      }
+                      val filt = if (searchQuery.isEmpty()) base else base.filter { it.title.contains(searchQuery, true) }
+                      val sort = when (currentSort) { 1 -> filt.sortedByDescending { it.dateAddedSec }; 2 -> filt.sortedByDescending { it.durationMs }; else -> filt.sortedBy { it.title.lowercase() } }
+                      uiHandler.post { binding.emptyView.visibility = if (sort.isEmpty()) View.VISIBLE else View.GONE; adapter.submitMediaList(sort) }
+                  }
+              }
+
+              private fun playMedia(sel: MediaItemModel, q: List<MediaItemModel>) {
+                  PrefsManager.addRecentUri(this, sel.uri.toString())
+                  val ctrl = mediaController ?: return
+                  val items = q.map {
+                      val ex = Bundle().apply { putBoolean("isVideo", it.isVideo) }
+                      val meta = MediaMetadata.Builder().setTitle(it.title).setArtist(it.artistOrResolution).setExtras(ex).build()
+                      MediaItem.Builder().setMediaId(it.uri.toString()).setUri(it.uri).setMediaMetadata(meta).build()
+                  }
+                  ctrl.setMediaItems(items, q.indexOfFirst { it.uri == sel.uri }.coerceAtLeast(0), 0L)
+                  ctrl.prepare(); ctrl.play(); updateMini()
+                  if (sel.isVideo) startActivity(Intent(this, VideoPlayerActivity::class.java))
+              }
+
+              private fun updateMini() {
+                  val c = mediaController ?: return
+                  val cur = c.currentMediaItem ?: run { binding.miniPlayer.visibility = View.GONE; return }
+                  binding.miniPlayer.visibility = View.VISIBLE
+                  binding.miniTitle.text = cur.mediaMetadata.title
+                  binding.miniSubtitle.text = cur.mediaMetadata.artist
+                  binding.btnPlayPause.text = if (c.isPlaying) "PAUSE" else "PLAY"
+                  binding.miniSeekBar.max = (c.duration.coerceAtLeast(1L) / 1000).toInt()
+                  binding.miniSeekBar.progress = (c.currentPosition.coerceAtLeast(0L) / 1000).toInt()
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/liteplay/ultralite/VideoPlayerActivity.kt
+          package com.liteplay.ultralite
+          import android.content.pm.ActivityInfo
+          import android.content.res.Configuration
+          import android.media.AudioManager
+          import android.os.Bundle
+          import android.os.Handler
+          import android.os.Looper
+          import android.view.View
+          import android.widget.SeekBar
+          import androidx.appcompat.app.AppCompatActivity
+          import androidx.media3.common.C
+          import com.liteplay.ultralite.databinding.ActivityVideoPlayerBinding
+          import java.util.Locale
+          import java.util.concurrent.TimeUnit
+
+          class VideoPlayerActivity : AppCompatActivity() {
+              private lateinit var binding: ActivityVideoPlayerBinding
+              private val uiHandler = Handler(Looper.getMainLooper())
+              private val updater = object : Runnable {
+                  override fun run() {
+                      val p = PlaybackService.playerInstance ?: return
+                      val d = p.duration.coerceAtLeast(1L); val pos = p.currentPosition.coerceAtLeast(0L)
+                      binding.videoSeekBar.max = (d / 1000).toInt(); binding.videoSeekBar.progress = (pos / 1000).toInt()
+                      binding.txtPosition.text = fmt(pos); binding.txtDuration.text = fmt(d)
+                      uiHandler.postDelayed(this, 500L)
+                  }
+              }
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  binding = ActivityVideoPlayerBinding.inflate(layoutInflater)
+                  setContentView(binding.root)
+                  val am = getSystemService(AUDIO_SERVICE) as AudioManager
+
+                  binding.playerView.setOnClickListener { binding.controlsOverlay.visibility = if (binding.controlsOverlay.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+                  binding.controlsOverlay.setOnClickListener { binding.controlsOverlay.visibility = View.GONE }
+                  binding.btnCloseVideo.setOnClickListener { finish() }
+                  binding.btnRotate.setOnClickListener {
+                      requestedOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                  }
+                  binding.btnVideoPlayPause.setOnClickListener {
+                      PlaybackService.playerInstance?.let { if (it.isPlaying) it.pause() else it.play(); binding.btnVideoPlayPause.text = if (it.isPlaying) "PAUSE" else "PLAY" }
+                  }
+                  binding.brightnessSeek.progress = 50
+                  binding.brightnessSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                      override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) { if (u) window.attributes = window.attributes.apply { screenBrightness = p.coerceAtLeast(5) / 100f } }
+                      override fun onStartTrackingTouch(s: SeekBar?) {}; override fun onStopTrackingTouch(s: SeekBar?) {}
+                  })
+                  binding.volumeSeek.max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                  binding.volumeSeek.progress = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                  binding.volumeSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                      override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) { if (u) am.setStreamVolume(AudioManager.STREAM_MUSIC, p, 0) }
+                      override fun onStartTrackingTouch(s: SeekBar?) {}; override fun onStopTrackingTouch(s: SeekBar?) {}
+                  })
+                  binding.videoSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                      override fun onProgressChanged(s: SeekBar?, p: Int, u: Boolean) { if (u) PlaybackService.playerInstance?.seekTo(p * 1000L) }
+                      override fun onStartTrackingTouch(s: SeekBar?) {}; override fun onStopTrackingTouch(s: SeekBar?) {}
+                  })
+              }
+
+              override fun onStart() {
+                  super.onStart()
+                  val p = PlaybackService.playerInstance ?: run { finish(); return }
+                  p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false).build()
+                  binding.playerView.player = p
+                  binding.videoTitle.text = p.currentMediaItem?.mediaMetadata?.title ?: "Video"
+                  uiHandler.post(updater)
+              }
+
+              override fun onStop() {
+                  uiHandler.removeCallbacks(updater)
+                  val p = PlaybackService.playerInstance
+                  binding.playerView.player = null
+                  p?.clearVideoSurface()
+                  if (p != null) {
+                      if (PrefsManager.isContinueAudioScreenOff(this) && !isFinishing) {
+                          p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true).build()
+                      } else if (!PrefsManager.isContinueAudioScreenOff(this)) p.pause()
+                  }
+                  super.onStop()
+              }
+
+              private fun fmt(ms: Long): String {
+                  val s = TimeUnit.MILLISECONDS.toSeconds(ms)
+                  return String.format(Locale.US, "%02d:%02d", (s % 3600) / 60, s % 60)
+              }
+          }
+          EOF
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Build Release APK
+        run: gradle assembleRelease
+
+      - name: Upload Ready APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LitePlay-Ultra-Lite-APK
+          path: app/build/outputs/apk/release/*.apk
